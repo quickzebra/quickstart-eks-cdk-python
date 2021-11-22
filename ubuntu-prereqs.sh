@@ -5,9 +5,11 @@
 # Install Node & Pyton
 apt update -y
 apt upgrade -y
-apt install nodejs npm python3-pip unzip -y
-ln -s /usr/bin/pip3 /usr/bin/pip
-ln -s /usr/bin/python3 /usr/bin/python
+curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
+apt update -y
+apt install nodejs python3-pip python3-testresources unzip -y
+#ln -s /usr/bin/pip3 /usr/bin/pip
+#ln -s /usr/bin/python3 /usr/bin/python
 
 # Install the latest AWS CLI
 cd /tmp
@@ -22,14 +24,12 @@ echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https:/
 apt-get update
 apt-get install -y kubectl
 
-# Install the fluxctl
-cd /tmp
-wget -O fluxctl https://github.com/fluxcd/flux/releases/download/1.21.2/fluxctl_linux_amd64
-chmod +x fluxctl
-mv fluxctl /usr/local/bin
+# Install Flux
+curl -s https://fluxcd.io/install.sh | sudo bash
 
 # Install Helm
-cd /tmp
-wget -O helm.tgz https://get.helm.sh/helm-v3.5.3-linux-amd64.tar.gz
-chmod +x linux-amd64/helm
-mv linux-amd64/helm /usr/local/bin 
+curl https://baltocdn.com/helm/signing.asc | sudo apt-key add -
+sudo apt-get install apt-transport-https --yes
+echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install helm

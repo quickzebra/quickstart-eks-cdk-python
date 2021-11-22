@@ -1,4 +1,4 @@
-# CDK to deploy ghost and its dependencies to the cluster created in Event Engine
+# CDK to deploy ghost and its dependencies to the cluster created in the Quick Start
 
 from aws_cdk import (
     aws_ec2 as ec2,
@@ -24,10 +24,6 @@ class GhostStack(core.Stack):
             self, "Ghost-DB-SG",
             vpc=vpc,
             allow_all_outbound=True
-        )
-        security_group.add_ingress_rule(
-            ec2.Peer.any_ipv4(),
-            ec2.Port.tcp(3306)
         )
 
         # Create a MySQL RDS
@@ -100,18 +96,57 @@ class GhostStack(core.Stack):
                 namespace="kube-system",
                 release="external-secrets",
                 values={
-                    "env": {
-                        "AWS_REGION": self.region
-                    },
+                        "env": {
+                            "AWS_REGION": self.region
+                        },
                     "serviceAccount": {
-                        "name": "kubernetes-external-secrets",
-                        "create": False
-                    },
+                            "name": "kubernetes-external-secrets",
+                            "create": False
+                        },
                     "securityContext": {
-                        "fsGroup": 65534
-                    }
+                            "fsGroup": 65534
+                        }
                 }
             )
+
+        # Deploy the Security Group Policy (SGP)
+        if (self.node.try_get_context("deploy_sgp") == "True"):
+            # Create a Securuty Group for our App Pods
+            security_group_pods = ec2.SecurityGroup(
+                self, "Ghost-Pod-SG",
+                vpc=vpc,
+                allow_all_outbound=True
+            )
+            # Only allow connections on port 3306 from the App Pods SG members
+            security_group.connections.allow_from(
+                other=security_group_pods, port_range=ec2.Port.tcp(3306))
+
+            # Create a SGP and add it to our EKS Cluster
+            sgp = eks_cluster.add_manifest("GhostSGP", {
+                "apiVersion": "vpcresources.k8s.aws/v1beta1",
+                "kind": "SecurityGroupPolicy",
+                "metadata": {
+                    "name": "ghost-sgp"
+                },
+                "spec": {
+                    "podSelector": {
+                        "matchLabels": {
+                            "app": "ghost"
+                        }
+                    },
+                    "securityGroups": {
+                        "groupIds": [
+                            security_group_pods.security_group_id,
+                            eks_cluster.kubectl_security_group.security_group_id
+                        ]
+                    }
+                }
+            })
+        # If not an SGP allow anything in the Cluster SG to connect to port 3306
+        else:
+            # Only allow connections on port 3306 from the Cluster SG
+            security_group.connections.allow_from(
+                other=eks_cluster.cluster_security_group, port_range=ec2.Port.tcp(3306))
 
         # Map in the secret for the ghost DB
         ghost_external_secret = eks_cluster.add_manifest("GhostExternalSecret", {
@@ -181,9 +216,17 @@ class GhostStack(core.Stack):
 
 
 app = core.App()
-account = os.environ.get("CDK_DEPLOY_ACCOUNT",
-                         os.environ["CDK_DEFAULT_ACCOUNT"])
-region = os.environ.get("CDK_DEPLOY_REGION", os.environ["CDK_DEFAULT_REGION"])
+if app.node.try_get_context("account").strip() != "":
+    account = app.node.try_get_context("account")
+else:
+    account = os.environ.get("CDK_DEPLOY_ACCOUNT",
+                             os.environ["CDK_DEFAULT_ACCOUNT"])
+
+if app.node.try_get_context("region").strip() != "":
+    region = app.node.try_get_context("region")
+else:
+    region = os.environ.get("CDK_DEPLOY_REGION",
+                            os.environ["CDK_DEFAULT_REGION"])
 ghost_stack = GhostStack(app, "GhostStack", env=core.Environment(
     account=account, region=region))
 app.synth()
