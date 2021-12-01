@@ -44,10 +44,6 @@ constructs==3.3.161
 jsii==1.43.0
 publication==0.0.3
 python-dateutil==2.8.2
-<<<<<<< HEAD
 PyYAML==6.0
 six==1.16.0
 typing-extensions==3.10.0.2
-=======
-typing-extensions==3.10.0.2
->>>>>>> a6b9bfcc888ffdffab9f8b063d20a59e6582d696
